@@ -196,7 +196,7 @@ public class CreateChibiFrames extends ApplicationAdapter {
         PNG encoder = new PixmapIO.PNG();
         encoder.setFlipY(true);
         for (int i = 0; i < frames.size(); ++i) {
-        	String filePath = String.format("/%04d.png", i);
+        	String filePath = String.format("%04d.png", i);
         	zout.putNextEntry(new ZipEntry(filePath));
     		encoder.write(zout, frames.get(i));
     		zout.closeEntry();
