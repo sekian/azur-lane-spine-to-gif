@@ -1,31 +1,33 @@
 // Sekian#6855
 
+import java.awt.image.BufferedImage;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import javax.imageio.ImageIO;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.backends.lwjgl.LwjglApplication;
 import com.badlogic.gdx.backends.lwjgl.LwjglApplicationConfiguration;
 import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.GL20;
-import com.badlogic.gdx.graphics.Pixmap;
-import com.badlogic.gdx.graphics.PixmapIO;
-import com.badlogic.gdx.graphics.PixmapIO.PNG;
 import com.badlogic.gdx.graphics.g2d.PolygonSpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas.TextureAtlasData;
 import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.utils.BufferUtils;
 import com.badlogic.gdx.utils.FloatArray;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.esotericsoftware.spine.Animation;
@@ -42,10 +44,11 @@ public class CreateChibiFrames extends ApplicationAdapter {
     float delta = 1/30.0f;
     PolygonSpriteBatch batch;
     ThreadPoolExecutor pool;
-	
+    CountDownLatch latch;
+    int nThreads = 20; //Average number of animations per skeleton
     public void create () {
         long start = System.currentTimeMillis();
-        int nThreads = Runtime.getRuntime().availableProcessors();
+        latch = new CountDownLatch(Integer.MAX_VALUE);
         batch = new PolygonSpriteBatch();
         renderer = new SkeletonRenderer();
         renderer.setPremultipliedAlpha(true);
@@ -53,22 +56,23 @@ public class CreateChibiFrames extends ApplicationAdapter {
         FileHandle[] a = dirHandle.list(".skel");
         FileHandle[] b = dirHandle.list(".skel.txt");
         List<FileHandle> directory = new ArrayList<FileHandle>(a.length + b.length);
-        pool = new ThreadPoolExecutor(nThreads, 100, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
         directory.addAll(Arrays.asList(a));
         directory.addAll(Arrays.asList(b));        
-        File file = new File("_out");
-        file.mkdirs();
-        for  (FileHandle skeletonFile: directory) {
+        File file = new File("_out"); file.mkdirs();
+        nThreads = Runtime.getRuntime().availableProcessors();
+        pool = new ThreadPoolExecutor(nThreads, Integer.MAX_VALUE, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+        for (FileHandle skeletonFile: directory) {
             long start2 = System.currentTimeMillis();
             SkeletonData skeletonData = loadSkeleton(skeletonFile);
             String skeletonName = skeletonFile.nameWithoutExtension();
             if (skeletonName.endsWith(".skel")) skeletonName = skeletonName.substring(0, skeletonName.length() - 5);
+            file = new File("_out/" + skeletonName); file.mkdirs();
             System.out.print(skeletonName+" ");
             for (Animation animation : skeletonData.getAnimations()) {
                 Vector2 min = new Vector2(0,0);
                 Vector2 max = new Vector2(0,0);
                 Vector2 pos = new Vector2(0,0);
-                getAnimationBounds(min, max, skeletonData, animation.getName());
+                getAnimationBounds(min, max, skeletonData, animation);
                 pos.x = Math.abs(min.x); 
                 pos.y = Math.abs(min.y); 
                 max.x += Math.abs(min.x);
@@ -76,8 +80,13 @@ public class CreateChibiFrames extends ApplicationAdapter {
                 min.x = 0;
                 min.y = 0;
                 try {
-                    saveAnimation(min, max, pos, skeletonData, animation.getName());
-                }   catch (Exception e) {e.printStackTrace();}
+                    int size = pool.getQueue().size();
+                    if (size > nThreads) {
+                        latch = new CountDownLatch(size - nThreads);
+                        latch.await(8, TimeUnit.SECONDS);
+                    }
+                    saveAnimation(min, max, pos, skeletonData, animation);
+                }   catch (Exception e) {e.printStackTrace();}      
             }
             long end2 = System.currentTimeMillis();
             System.out.print((end2 - start2)/1000.0 + "s\n");
@@ -88,7 +97,6 @@ public class CreateChibiFrames extends ApplicationAdapter {
         } catch (InterruptedException e) {e.printStackTrace();}
         long end = System.currentTimeMillis();
         System.out.println((end - start)/1000.0 + "s");
-        
         Gdx.app.exit();
     }
     public SkeletonData loadSkeleton (FileHandle skeletonFile) {
@@ -106,9 +114,9 @@ public class CreateChibiFrames extends ApplicationAdapter {
         SkeletonBinary binary = new SkeletonBinary(atlas);
         SkeletonData skeletonData = binary.readSkeletonData(skeletonFile);
         return skeletonData;
-    }	
+    }
 	//max and min world coordinates for all the animation
-    public void getAnimationBounds(Vector2 min, Vector2 max, SkeletonData skeletonData, String animation) {
+    public void getAnimationBounds(Vector2 min, Vector2 max, SkeletonData skeletonData, Animation animation) {
         float minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
         Skeleton skeleton = new Skeleton(skeletonData);
         skeleton.setToSetupPose();
@@ -134,87 +142,108 @@ public class CreateChibiFrames extends ApplicationAdapter {
         //System.out.println(minX +" "+ minY);
         //System.out.println(maxX +" "+ maxY);
     }
-    public void saveAnimation (Vector2 min, Vector2 max, Vector2 pos, SkeletonData skeletonData, String animation) throws Exception {
+    public ByteBuffer getFrameBufferPixels(int minX, int minY, int maxX, int maxY) {
+		Gdx.gl.glPixelStorei(GL20.GL_PACK_ALIGNMENT, 1);
+		final ByteBuffer pixels = ByteBuffer.allocateDirect(maxX * maxY * 4);
+		pixels.order(ByteOrder.nativeOrder());
+		Gdx.gl.glReadPixels(0, 0, maxX, maxY, GL20.GL_RGBA, GL20.GL_UNSIGNED_BYTE, pixels);
+		return pixels;
+    }
+    public void saveAnimation (Vector2 min, Vector2 max, Vector2 pos, SkeletonData skeletonData, Animation animation) throws Exception {
         AnimationState state = new AnimationState(new AnimationStateData(skeletonData));
         Skeleton skeleton = new Skeleton(skeletonData);
+        Skeleton skeletonAlpha = new Skeleton(skeletonData);
         skeleton.setToSetupPose();
-        skeleton = new Skeleton(skeleton);
         skeleton.updateWorldTransform();
+        skeletonAlpha.setToSetupPose();
+        skeletonAlpha.updateWorldTransform();
         state.getData().setDefaultMix(0.0f);
         state.setAnimation(0, animation, false);
 		int minX = (int)Math.floor(min.x);
 		int minY = (int)Math.floor(min.y);
 		int maxX = (int)Math.ceil(max.x)-minX;
-		int maxY = (int)Math.ceil(max.y)-minY;	
-        List<Pixmap> frames = new ArrayList<Pixmap>(); 
+		int maxY = (int)Math.ceil(max.y)-minY;
+		int size = (int)(animation.getDuration()/delta) + 2;
+		//List<ByteBuffer> frames = new ArrayList<ByteBuffer>(size);
+		List<byte[]> frames = new ArrayList<byte[]>(size);
         while (!state.getCurrent(0).isComplete()) {
         	Gdx.gl.glClearColor(0, 0, 0, 0);
             Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-            renderer.setPremultipliedAlpha(false);
             state.update(delta);
-            state.apply(skeleton);            
+            state.apply(skeleton);
             skeleton.setPosition(pos.x, pos.y);
-            skeleton.updateWorldTransform();                
-			batch.begin();
-			renderer.draw(batch, skeleton);
-			batch.end();	
-			byte[] pixels = ScreenUtils.getFrameBufferPixels(minX, minY, maxX, maxY, true);
-			renderer.setPremultipliedAlpha(true);
-			batch.begin();
+            skeleton.updateWorldTransform();
+            if (Gdx.graphics.getWidth() < maxX || Gdx.graphics.getHeight() < maxY)
+            	Gdx.graphics.setWindowedMode(maxX, maxY);
+            batch.begin();
+			renderer.setPremultipliedAlpha(false);
 			renderer.draw(batch, skeleton);
 			batch.end();
-			byte[] pixelsAlpha = ScreenUtils.getFrameBufferPixels(minX, minY, maxX, maxY, true);				
-			for(int i = 4; i < pixels.length; i += 4) {
+			byte[] pixels = ScreenUtils.getFrameBufferPixels(minX, minY, maxX, maxY, false);
+			batch.begin();
+			renderer.setPremultipliedAlpha(true);
+			renderer.draw(batch, skeleton);
+			batch.end();	
+			byte[] pixelsAlpha = ScreenUtils.getFrameBufferPixels(minX, minY, maxX, maxY, false);			
+			for (int i = 4; i < pixels.length; i += 4) {
 			    pixels[i - 1] = pixelsAlpha[i - 1];
 			}
-            Pixmap pixmap = new Pixmap(maxX, maxY, Pixmap.Format.RGBA8888);
-            BufferUtils.copy(pixels, 0, pixmap.getPixels(), pixels.length);
-            frames.add(pixmap);
+			//pixelsAlpha.clear();
+            frames.add(pixels);
         }
         pool.execute(new Runnable() {
         @Override
 	        public void run() {
 	        	try {
-					saveWork(frames, state.getCurrent(0).toString(), skeletonData.getName());
+					saveWork(frames, animation.getName(), skeletonData.getName(), maxX, maxY);
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
 	        }
-    	});       
+    	});      
     }
-	public void doWork(Pixmap pixmap, String fileName) {
-		PixmapIO.writePNG(Gdx.files.absolute(fileName), pixmap);
-		pixmap.dispose();
-	}
-	public void saveWork(List<Pixmap> frames, String animationName, String skeletonName) throws IOException {	
+    public void saveWork(List<byte[]> frames, String animationName, String skeletonName, int maxX, int maxY) throws IOException {   
         if (skeletonName.endsWith(".skel")) 
-        	skeletonName = skeletonName.substring(0, skeletonName.length() - 5);
-	    File file = new File("_out/" + skeletonName); file.mkdirs();
+            skeletonName = skeletonName.substring(0, skeletonName.length() - 5);        
         FileOutputStream fout = new FileOutputStream("_out/" + skeletonName +"/"+ animationName + ".zip");
         BufferedOutputStream bout = new BufferedOutputStream(fout);
-        ZipOutputStream zout = new ZipOutputStream(bout);  
-        PNG encoder = new PixmapIO.PNG();
-        encoder.setFlipY(false);
-        for (int i = 0; i < frames.size(); ++i) {
-        	String filePath = String.format("%04d.png", i);
-        	zout.putNextEntry(new ZipEntry(filePath));
-    		encoder.write(zout, frames.get(i));
-    		zout.closeEntry();
-    		frames.get(i).dispose();
+        ZipOutputStream zout = new ZipOutputStream(bout);
+        zout.setLevel(Deflater.NO_COMPRESSION);
+        for (int ii = 0; ii < frames.size(); ++ii) {
+            byte[] pixels = frames.get(ii);
+            BufferedImage image = new BufferedImage(maxX, maxY, BufferedImage.TYPE_INT_ARGB);    
+            for (int x = 0; x < maxX; x++) {
+                for (int y = 0; y < maxY; y++) {
+                    int i = (x + (maxX * y)) * 4;
+                    int r = pixels[i + 0] & 0xFF;
+                    int g = pixels[i + 1] & 0xFF;
+                    int b = pixels[i + 2] & 0xFF;
+                    int a = pixels[i + 3] & 0xFF;
+                    image.setRGB(x, maxY - y - 1, (a << 24) | (r << 16) | (g << 8) | b);
+                }
+            }
+            pixels = null;
+            frames.set(ii, null);
+            String filePath = String.format("%04d.gif", ii);
+            zout.putNextEntry(new ZipEntry(filePath));
+            ImageIO.write(image, "gif", zout);
+            zout.closeEntry(); 
+            image.flush();
+            image = null;
         }
-        frames.clear();
+        //frames.clear();
         frames = null;
         zout.close();
         bout.close();
         fout.close();
-	}
+    }
     public static void main(String [] args) {
 	    CreateChibiFrames anim = new CreateChibiFrames();
 	    if (args.length >= 1) anim.delta = 1/Float.parseFloat(args[0]);
 	    System.out.println(Math.round(1/anim.delta));
 	    LwjglApplicationConfiguration config = new LwjglApplicationConfiguration();
-	    config.width = (int)(640);
-	    config.height = (int)(360);
+	    config.width = (int)(960);
+	    config.height = (int)(720);
 	    new LwjglApplication(anim, config);
     }
 }
