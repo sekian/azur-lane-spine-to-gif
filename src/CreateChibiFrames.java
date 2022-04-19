@@ -45,25 +45,19 @@ import com.esotericsoftware.spine.Skeleton;
 import com.esotericsoftware.spine.SkeletonBinary;
 import com.esotericsoftware.spine.SkeletonData;
 import com.esotericsoftware.spine.SkeletonRenderer;
+import com.github.dragon66.AnimatedGIFWriter;
 
 public class CreateChibiFrames extends ApplicationAdapter {
 	public enum Format {
 	    PNG, PNG8, PNG32, GIF
 	}
-    SkeletonRenderer renderer;
-    AnimationState state;
     float delta = 1/30.0f;
-    PolygonSpriteBatch batch;
     ThreadPoolExecutor pool;
     CountDownLatch latch;
-    int nThreads = 20; //Average number of animations per skeleton
     Format format = Format.PNG;
     public void create () {
         long start = System.currentTimeMillis();
         latch = new CountDownLatch(Integer.MAX_VALUE);
-        batch = new PolygonSpriteBatch();
-        renderer = new SkeletonRenderer();
-        renderer.setPremultipliedAlpha(true);
         FileHandle dirHandle = Gdx.files.absolute("./");        
         FileHandle[] a = dirHandle.list(".skel");
         FileHandle[] b = dirHandle.list(".skel.txt");
@@ -71,7 +65,8 @@ public class CreateChibiFrames extends ApplicationAdapter {
         directory.addAll(Arrays.asList(a));
         directory.addAll(Arrays.asList(b));        
         File file = new File("_out"); file.mkdirs();
-        nThreads = Runtime.getRuntime().availableProcessors();
+        int nThreads = Runtime.getRuntime().availableProcessors() - 1;
+        nThreads = Math.max(nThreads, 1);
         pool = new ThreadPoolExecutor(nThreads, Integer.MAX_VALUE, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
         System.out.printf("%d files found\nProcessing starts...\n", directory.size());
         for (int i = 0; i < directory.size(); ++i) {
@@ -161,8 +156,7 @@ public class CreateChibiFrames extends ApplicationAdapter {
         }
         min.set(minX, minY);
         max.set(maxX, maxY);
-        //System.out.println(minX +" "+ minY);
-        //System.out.println(maxX +" "+ maxY);
+        //System.out.println(min +" "+ max);
     }
     public ByteBuffer getFrameBufferPixels(int minX, int minY, int maxX, int maxY) {
 		Gdx.gl.glPixelStorei(GL20.GL_PACK_ALIGNMENT, 1);
@@ -331,8 +325,8 @@ public class CreateChibiFrames extends ApplicationAdapter {
 	    }
 	    System.out.println("Framerate = " + Math.round(1/anim.delta) + "\nFormat = "+anim.format);
 	    LwjglApplicationConfiguration config = new LwjglApplicationConfiguration();
-	    config.width = (int)(960);
-	    config.height = (int)(720);
+	    config.width = (int)(0);
+	    config.height = (int)(0);
 	    new LwjglApplication(anim, config);
     }
 }
