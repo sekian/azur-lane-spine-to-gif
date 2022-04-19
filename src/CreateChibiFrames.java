@@ -148,7 +148,7 @@ public class CreateChibiFrames extends ApplicationAdapter {
             state.apply(skeleton);
             skeleton.setPosition(0, 0);
             skeleton.updateWorldTransform();
-            skeleton.getBounds(min, max, new FloatArray());    
+            skeleton.getBounds(min, max, new FloatArray());
             maxX = Math.max(maxX, max.x+min.x); //Cancel the substracted min returned from getBounds
             maxY = Math.max(maxY, max.y+min.y); //because we want the absolute max value (not the distance)
             minX = Math.min(minX, min.x);
@@ -239,7 +239,6 @@ public class CreateChibiFrames extends ApplicationAdapter {
         BufferedOutputStream bout = new BufferedOutputStream(fout);
         ZipOutputStream zout = new ZipOutputStream(bout);
         zout.setLevel(Deflater.NO_COMPRESSION);
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
         for (int ii = 0; ii < frames.size(); ++ii) {
             byte[] pixels = frames.get(ii);
             BufferedImage image = new BufferedImage(maxX, maxY, BufferedImage.TYPE_INT_ARGB);    
@@ -265,18 +264,19 @@ public class CreateChibiFrames extends ApplicationAdapter {
             else { //PNG8
             	String filePath = String.format("%04d.png", ii);
             	zout.putNextEntry(new ZipEntry(filePath));
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 writer.prepareForWrite(baos, maxX, maxY);
                 writer.writeFrame(baos, image, Math.round(1000*delta));
                 ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
                 BufferedImage im1 = ImageIO.read(bais);
                 ImageIO.write(im1, "png", zout);
                 bais.close();
+                baos.close();
             }
             zout.closeEntry();
             image.flush();
             image = null;
         }
-        baos.close();
         //frames.clear();
         frames = null;
         zout.close();
