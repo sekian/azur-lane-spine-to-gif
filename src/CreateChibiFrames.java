@@ -183,11 +183,18 @@ public class CreateChibiFrames extends ApplicationAdapter {
 		int minY = (int)Math.floor(min.y);
 		int maxX = (int)Math.ceil(max.x)-minX;
 		int maxY = (int)Math.ceil(max.y)-minY;
-		if (Gdx.graphics.getWidth() < maxX || Gdx.graphics.getHeight() < maxY)
-			Gdx.graphics.setWindowedMode(maxX, maxY);
+		//System.out.println(min +" "+ pos + " " + max);
+        if (Gdx.graphics.getWidth() < maxX || Gdx.graphics.getHeight() < maxY) {
+        	int new_sizeX = Math.max(maxX, Gdx.graphics.getWidth());
+        	int new_sizeY = Math.max(maxY, Gdx.graphics.getHeight());
+        	Gdx.graphics.setWindowedMode(new_sizeX, new_sizeY);
+        }
 		int size = (int)(animation.getDuration()/delta) + 2;
 		//List<ByteBuffer> frames = new ArrayList<ByteBuffer>(size);
 		List<byte[]> frames = new ArrayList<byte[]>(size);
+        SkeletonRenderer renderer = new SkeletonRenderer();
+        PolygonSpriteBatch batch = new PolygonSpriteBatch();
+        //renderer.setPremultipliedAlpha(true);
         while (!state.getCurrent(0).isComplete()) {
         	Gdx.gl.glClearColor(0, 0, 0, 0);
             Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
