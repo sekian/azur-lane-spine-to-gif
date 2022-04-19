@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+   <modelVersion>4.0.0</modelVersion>
+   <groupId>al-extract-spine-anim</groupId>
+   <artifactId>al-extract-spine-anim</artifactId>
+   <version>0.4.3-SNAPSHOT</version>
+   <build>
+      <sourceDirectory>src</sourceDirectory>
+      <plugins>
+         <plugin>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>3.7.0</version>
+            <configuration>
+               <source>1.8</source>
+               <target>1.8</target>
+            </configuration>
+         </plugin>
+      </plugins>
+   </build>
+   <dependencies>
+      <!-- https://mvnrepository.com/artifact/com.esotericsoftware.spine/spine-libgdx -->
+      <dependency>
+         <groupId>com.esotericsoftware.spine</groupId>
+         <artifactId>spine-libgdx</artifactId>
+         <version>3.6.53.1</version>
+      </dependency>
+      <!-- https://mvnrepository.com/artifact/com.badlogicgames.gdx/gdx -->
+      <dependency>
+         <groupId>com.badlogicgames.gdx</groupId>
+         <artifactId>gdx</artifactId>
+         <version>1.9.14</version>
+      </dependency>
+      <!-- https://mvnrepository.com/artifact/com.badlogicgames.gdx/gdx-platform -->
+      <dependency>
+         <groupId>com.badlogicgames.gdx</groupId>
+         <artifactId>gdx-platform</artifactId>
+         <version>1.9.14</version>
+         <classifier>natives-desktop</classifier>
+      </dependency>
+      <!-- https://mvnrepository.com/artifact/com.badlogicgames.gdx/gdx-backend-lwjgl -->
+      <dependency>
+         <groupId>com.badlogicgames.gdx</groupId>
+         <artifactId>gdx-backend-lwjgl</artifactId>
+         <version>1.9.14</version>
+      </dependency>
+      <dependency>
+         <groupId>com.github.dragon66</groupId>
+         <artifactId>animated-gif-writer</artifactId>
+         <version>1.0.0</version>
+      </dependency>
+   </dependencies>
+   <name>Azur Lane Extract Spine Animations</name>
+   <description>Extract Azur Lane Spine Animations</description>
+   <properties>
+      <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+   </properties>
+   <repositories>
+      <repository>
+         <id>lib</id>
+         <url>file://${project.basedir}/lib</url>
+      </repository>
+   </repositories>
+</project>
