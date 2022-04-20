@@ -1,7 +1,7 @@
 # AzurLane-getChibiFrames
-Create a sequence of transparent images for each animation from the Azur Lane spine files.
+Extract individual frames for each animation from the Azur Lane spine files.
 
-All the extracted chibi animations will be ready to be built as a .gif or any other media file.
+All the extracted chibi animations will be ready to be built as a .gif or any other media format.
 
 ### GIF creation example with ImageMagick
 
